@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:gallery_saver/files.dart';
 import 'package:http/http.dart' as http;
@@ -18,12 +20,11 @@ class GallerySaver {
   static const MethodChannel _channel = const MethodChannel(channelName);
 
   ///saves video from provided temp path and optional album name in gallery
-  static Future<bool?> saveVideo(
-    String path, {
-    String? albumName,
-    bool toDcim = false,
-    Map<String, String>? headers,
-  }) async {
+  static Future<bool?> saveVideo(String path,
+      {String? albumName,
+      bool toDcim = false,
+      Map<String, String>? headers,
+      Function(int received, int total)? onReceiveProgress}) async {
     File? tempFile;
     if (path.isEmpty) {
       throw ArgumentError(pleaseProvidePath);
@@ -32,7 +33,7 @@ class GallerySaver {
       throw ArgumentError(fileIsNotVideo);
     }
     if (!isLocalFilePath(path)) {
-      tempFile = await _downloadFile(path, headers: headers);
+      tempFile = await _downloadFile(path, onReceiveProgress, headers: headers);
       path = tempFile.path;
     }
     bool? result = await _channel.invokeMethod(
@@ -46,12 +47,11 @@ class GallerySaver {
   }
 
   ///saves image from provided temp path and optional album name in gallery
-  static Future<bool?> saveImage(
-    String path, {
-    String? albumName,
-    bool toDcim = false,
-    Map<String, String>? headers,
-  }) async {
+  static Future<bool?> saveImage(String path,
+      {String? albumName,
+      bool toDcim = false,
+      Map<String, String>? headers,
+      Function(int, int)? onReceiveProgress}) async {
     File? tempFile;
     if (path.isEmpty) {
       throw ArgumentError(pleaseProvidePath);
@@ -60,7 +60,7 @@ class GallerySaver {
       throw ArgumentError(fileIsNotImage);
     }
     if (!isLocalFilePath(path)) {
-      tempFile = await _downloadFile(path, headers: headers);
+      tempFile = await _downloadFile(path, onReceiveProgress, headers: headers);
       path = tempFile.path;
     }
 
@@ -75,21 +75,28 @@ class GallerySaver {
     return result;
   }
 
-  static Future<File> _downloadFile(String url,
+  static Future<File> _downloadFile(
+      String url, Function(int, int)? onReceiveProgress,
       {Map<String, String>? headers}) async {
     print(url);
-    print(headers);
-    http.Client _client = new http.Client();
-    var req = await _client.get(Uri.parse(url), headers: headers);
-    if (req.statusCode >= 400) {
-      throw HttpException(req.statusCode.toString());
-    }
-    var bytes = req.bodyBytes;
+    // print(headers);
+    // http.Client _client = new http.Client();
+    // var req = await _client.get(Uri.parse(url), headers: headers);
+    // if (req.statusCode >= 400) {
+    //   throw HttpException(req.statusCode.toString());
+    // }
+    // var bytes = req.bodyBytes;
+    var dio = Dio();
+    var response = await dio.get(url,
+        onReceiveProgress: (count, total) => onReceiveProgress!(count, total));
+
     String dir = (await getTemporaryDirectory()).path;
     File file = new File('$dir/${basename(url)}');
-    await file.writeAsBytes(bytes);
+    // await file.writeAsBytes(bytes);
+    await file.writeAsBytes(response.data);
     print('File size:${await file.length()}');
     print(file.path);
+
     return file;
   }
 }
