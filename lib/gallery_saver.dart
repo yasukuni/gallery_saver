@@ -79,21 +79,33 @@ class GallerySaver {
       String url, Function(int, int)? onReceiveProgress,
       {Map<String, String>? headers}) async {
     print(url);
-    // print(headers);
-    // http.Client _client = new http.Client();
+    print(headers);
+    http.Client _client = new http.Client();
     // var req = await _client.get(Uri.parse(url), headers: headers);
-    // if (req.statusCode >= 400) {
-    //   throw HttpException(req.statusCode.toString());
-    // }
-    // var bytes = req.bodyBytes;
-    var dio = Dio();
-    var response = await dio.get(url,
-        onReceiveProgress: (count, total) => onReceiveProgress!(count, total));
+    var req = await _client.send(http.Request('GET', Uri.parse(url)));
+    int total = req.contentLength ?? 0;
+    int received = 0;
+    final List<int> bytes = [];
+
+    if (req.statusCode >= 400) {
+      throw HttpException(req.statusCode.toString());
+    }
+
+    try {
+      await for (final value in req.stream) {
+        bytes.addAll(value);
+        received += value.length;
+        onReceiveProgress!(received, total);
+      }
+    } catch (e) {
+      throw ArgumentError(fileIsNotVideo);
+    }
 
     String dir = (await getTemporaryDirectory()).path;
     File file = new File('$dir/${basename(url)}');
-    // await file.writeAsBytes(bytes);
-    await file.writeAsBytes(response.data);
+
+    await file.writeAsBytes(bytes);
+
     print('File size:${await file.length()}');
     print(file.path);
 
